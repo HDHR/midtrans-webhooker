@@ -1,9 +1,9 @@
 use midtrans_webhooker::midtrans::{
     format_currency, get_status_details, get_bi_snap_status_details,
-    get_iris_status_details, verify_midtrans_signature, verify_bi_snap_signature,
-    verify_iris_signature, load_public_key,
+    get_iris_status_details, verify_midtrans_signature,
+    verify_iris_signature,
 };
-use midtrans_webhooker::lark::generate_lark_sign;
+use midtrans_webhooker::lark::{generate_lark_sign, build_lark_payment_card};
 use serde_json::json;
 use sha2::{Sha512, Digest};
 
@@ -118,4 +118,22 @@ fn test_lark_signature_generation() {
     let timestamp = 1729000000;
     let sign = generate_lark_sign(secret, timestamp);
     assert!(sign.is_some());
+}
+
+#[test]
+fn test_lark_card_backtick_cleaned() {
+    let payload = json!({
+        "order_id": "order-gopay-1792075936",
+        "transaction_status": "pending",
+        "gross_amount": "44000.00",
+        "currency": "IDR",
+        "payment_type": "gopay",
+        "transaction_time": "2026-10-15 21:52:15",
+        "transaction_id": "6742b5cb-b1b1-4341-b49e-1b60fd7b01e4"
+    });
+
+    let res = build_lark_payment_card(&payload, None, None);
+    let card_str = res.card.to_string();
+    assert!(!card_str.contains("`"), "Lark card fields should not contain unrendered literal backticks: {}", card_str);
+    assert!(card_str.contains("order-gopay-1792075936"));
 }
