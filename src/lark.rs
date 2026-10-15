@@ -19,12 +19,19 @@ fn truncate(s: &str, max: usize) -> String {
     }
 }
 
+/// Strip any inline code backticks because Lark `lark_md` inside fields
+/// does not render inline code and shows raw backticks instead.
+fn clean_lark_text(s: &str) -> String {
+    s.replace('`', "")
+}
+
 fn create_lark_field(tag: &str, content: &str, is_short: bool) -> serde_json::Value {
+    let cleaned = clean_lark_text(content);
     json!({
         "is_short": is_short,
         "text": {
             "tag": "lark_md",
-            "content": format!("**{}**\n{}", tag, truncate(content, 1024))
+            "content": format!("**{}**\n{}", tag, truncate(&cleaned, 1024))
         }
     })
 }
@@ -106,7 +113,7 @@ pub fn build_lark_payment_card(
     let formatted_amount = format_currency(gross_amt_str.as_deref(), currency);
 
     let mut fields = vec![
-        create_lark_field("Order ID", &format!("`{}`", order_id), true),
+        create_lark_field("Order ID", order_id, true),
         create_lark_field("Amount", &format!("**{}**", formatted_amount), true),
         create_lark_field("Status", &status_info.badge, true),
         create_lark_field("Payment Method", &payment_method.name, true),
@@ -117,11 +124,11 @@ pub fn build_lark_payment_card(
     }
 
     if let Some(trx_time) = notification.get("transaction_time").and_then(|v| v.as_str()) {
-        fields.push(create_lark_field("Transaction Time", &format!("`{}`", trx_time), true));
+        fields.push(create_lark_field("Transaction Time", trx_time, true));
     }
 
     if let Some(trx_id) = notification.get("transaction_id").and_then(|v| v.as_str()) {
-        fields.push(create_lark_field("Midtrans ID", &format!("`{}`", trx_id), false));
+        fields.push(create_lark_field("Midtrans ID", trx_id, false));
     }
 
     let mut elements = Vec::new();
@@ -209,8 +216,8 @@ pub fn build_lark_recurring_card(
     };
 
     let mut fields = vec![
-        create_lark_field("Subscription ID", &format!("`{}`", sub_id), true),
-        create_lark_field("Order ID", &format!("`{}`", order_id), true),
+        create_lark_field("Subscription ID", sub_id, true),
+        create_lark_field("Order ID", order_id, true),
         create_lark_field("Status", &status_badge, true),
     ];
 
@@ -260,7 +267,7 @@ pub fn build_lark_recurring_card(
     let card = json!({
         "config": { "wide_screen_mode": true },
         "header": {
-            "title": { "tag": "plain_text", "content": "🔁 Recurring Payment Notification" },
+            "title": { "tag": "plain_text", "content": "🔄 Recurring Payment Notification" },
             "template": template
         },
         "elements": elements
@@ -277,31 +284,30 @@ pub fn build_lark_binding_card(
     mention: Option<&str>,
     raw_url: Option<&str>,
 ) -> LarkBuildResult {
-    let account_id = notification.get("account_id")
-        .or_else(|| notification.get("payment_account_id"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("N/A");
-
-    let account_status = notification.get("account_status")
-        .or_else(|| notification.get("status"))
+    let account_id = notification.get("account_id").and_then(|v| v.as_str()).unwrap_or("N/A");
+    let status = notification.get("status")
+        .or_else(|| notification.get("account_status"))
         .and_then(|v| v.as_str())
         .unwrap_or("UNKNOWN")
         .to_uppercase();
 
-    let status_code = notification.get("status_code").and_then(|v| v.as_str()).unwrap_or("N/A");
-    let channel = notification.get("channel")
+    let channel = notification.get("channel_id")
         .or_else(|| notification.get("payment_type"))
         .and_then(|v| v.as_str())
-        .unwrap_or("Account Binding");
+        .unwrap_or("N/A")
+        .to_uppercase();
 
-    let is_enabled = account_status == "ENABLED" || status_code == "200";
-    let template = if is_enabled { "green" } else { "grey" };
-    let status_badge = if is_enabled { "🟢 Linked / Enabled" } else { "⚪ Unlinked / Disabled" };
+    let is_enabled = status == "ENABLED" || status == "ACTIVE" || status == "SUCCESS";
+    let (template, status_badge) = if is_enabled {
+        ("green", format!("🟢 {}", status))
+    } else {
+        ("red", format!("🔴 {}", status))
+    };
 
     let mut fields = vec![
-        create_lark_field("Account ID", &format!("`{}`", account_id), true),
-        create_lark_field("Binding Status", status_badge, true),
-        create_lark_field("Channel", channel, true),
+        create_lark_field("Account ID", account_id, true),
+        create_lark_field("Binding Status", &status_badge, true),
+        create_lark_field("Channel", &channel, true),
     ];
 
     if let Some(msg) = notification.get("status_message").and_then(|v| v.as_str()) {
@@ -310,7 +316,7 @@ pub fn build_lark_binding_card(
 
     if let Some(meta) = notification.get("metadata") {
         if meta.is_object() {
-            fields.push(create_lark_field("Metadata", &format!("`{}`", meta), false));
+            fields.push(create_lark_field("Metadata", &meta.to_string(), false));
         }
     }
 
@@ -387,7 +393,7 @@ pub fn build_lark_bi_snap_card(
     let formatted_amount = format_currency(amt_val.as_deref(), Some(currency));
 
     let mut fields = vec![
-        create_lark_field("Order / Partner Ref", &format!("`{}`", order_id), true),
+        create_lark_field("Order / Partner Ref", order_id, true),
         create_lark_field("Amount", &format!("**{}**", formatted_amount), true),
         create_lark_field("Status", &status_info.badge, true),
     ];
@@ -398,7 +404,7 @@ pub fn build_lark_bi_snap_card(
         let trx_type = qris.get("transactionType").and_then(|v| v.as_str()).unwrap_or("N/A");
         fields.push(create_lark_field(
             "QRIS Details",
-            &format!("Issuer: **{}**\nAcquirer: **{}**\nType: `{}`", issuer, acquirer, trx_type),
+            &format!("Issuer: **{}**\nAcquirer: **{}**\nType: {}", issuer, acquirer, trx_type),
             true,
         ));
     }
@@ -423,14 +429,14 @@ pub fn build_lark_bi_snap_card(
         let name = notification.get("virtualAccountName").and_then(|v| v.as_str()).unwrap_or("N/A");
         fields.push(create_lark_field(
             "Virtual Account",
-            &format!("No: `{}`\nName: {}", va, name),
+            &format!("No: {}\nName: {}", va, name),
             true,
         ));
     }
 
     if let Some(orig_ref) = notification.get("originalReferenceNo").and_then(|v| v.as_str()) {
         if orig_ref != order_id {
-            fields.push(create_lark_field("Midtrans Ref", &format!("`{}`", orig_ref), true));
+            fields.push(create_lark_field("Midtrans Ref", orig_ref, true));
         }
     }
 
@@ -439,7 +445,7 @@ pub fn build_lark_bi_snap_card(
     if partner_id.is_some() || external_id.is_some() {
         fields.push(create_lark_field(
             "BI SNAP Headers",
-            &format!("Partner: `{}` | Ext ID: `{}`", partner_id.unwrap_or("N/A"), external_id.unwrap_or("N/A")),
+            &format!("Partner: {} | Ext ID: {}", partner_id.unwrap_or("N/A"), external_id.unwrap_or("N/A")),
             false,
         ));
     }
@@ -509,7 +515,7 @@ pub fn build_lark_iris_card(
     let formatted_amount = format_currency(amt_val.as_deref(), Some("IDR"));
 
     let mut fields = vec![
-        create_lark_field("Reference No", &format!("`{}`", ref_no), true),
+        create_lark_field("Reference No", ref_no, true),
         create_lark_field("Amount", &format!("**{}**", formatted_amount), true),
         create_lark_field("Status", &status_info.badge, true),
     ];
@@ -520,7 +526,7 @@ pub fn build_lark_iris_card(
 
     if bank_code.is_some() || account.is_some() || ben_name.is_some() {
         let b = bank_code.map(|b| b.to_uppercase()).unwrap_or_else(|| "Bank".to_string());
-        let a = account.map(|acc| format!(" `{}`", acc)).unwrap_or_default();
+        let a = account.map(|acc| format!(" {}", acc)).unwrap_or_default();
         let n = ben_name.map(|name| format!(" ({})", name)).unwrap_or_default();
         fields.push(create_lark_field("Beneficiary", format!("{}{}{}", b, a, n).trim(), true));
     }
@@ -530,7 +536,7 @@ pub fn build_lark_iris_card(
     }
 
     if let Some(err_msg) = notification.get("error_message").and_then(|v| v.as_str()) {
-        fields.push(create_lark_field("Error Message", &format!("`{}`", err_msg), false));
+        fields.push(create_lark_field("Error Message", err_msg, false));
     }
 
     let timestamp_str = notification.get("updated_at")
@@ -538,7 +544,7 @@ pub fn build_lark_iris_card(
         .and_then(|v| v.as_str());
 
     if let Some(ts) = timestamp_str {
-        fields.push(create_lark_field("Timestamp", &format!("`{}`", ts), true));
+        fields.push(create_lark_field("Timestamp", ts, true));
     }
 
     let mut elements = Vec::new();
@@ -564,7 +570,7 @@ pub fn build_lark_iris_card(
     elements.push(json!({
         "tag": "note",
         "elements": [
-            { "tag": "plain_text", "content": format!("Midtrans IRIS • Disbursement • {}", chrono::Utc::now().to_rfc3339()) }
+            { "tag": "plain_text", "content": format!("Midtrans • IRIS Disbursement • {}", chrono::Utc::now().to_rfc3339()) }
         ]
     }));
 
@@ -618,14 +624,6 @@ pub async fn send_lark_webhook(
         let status = res.status();
         let body = res.text().await.unwrap_or_default();
         return Err(format!("Lark API HTTP {}: {}", status, body));
-    }
-
-    let res_json: serde_json::Value = res.json().await.unwrap_or(serde_json::Value::Null);
-    if let Some(code) = res_json.get("code").and_then(|c| c.as_i64()) {
-        if code != 0 {
-            let msg = res_json.get("msg").and_then(|m| m.as_str()).unwrap_or("Unknown Lark error");
-            return Err(format!("Lark bot error code {}: {}", code, msg));
-        }
     }
 
     Ok(())
