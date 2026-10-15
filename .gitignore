@@ -1,0 +1,25 @@
+# Build target
+/target
+
+# Secrets & Environment
+.env
+.env.*
+!.env.example
+
+# Cryptographic Keys & Certificates
+*.pem
+*.key
+*.crt
+*.pub
+keys/*.pem
+keys/*.key
+keys/*.crt
+
+# Logs & System
+*.log
+.DS_Store
+Thumbs.db
+
+# IDEs & Editors
+.vscode/
+.idea/
