@@ -32,6 +32,9 @@ fn attach_raw_button(payload: &mut serde_json::Value, raw_url: Option<&str>) {
                         "type": 2, // Button
                         "style": 5, // Link button
                         "label": "View Raw JSON",
+                        "emoji": {
+                            "name": "🔍"
+                        },
                         "url": url
                     }
                 ]
@@ -81,14 +84,25 @@ pub fn build_legacy_payment_embed(
         fields.push(create_field("🆔 Midtrans ID", &format!("`{}`", trx_id), false));
     }
 
-    let embed = json!({
+    let desc_base = format!("[Legacy Payment] Update for order **{}**", order_id);
+    let description = if let Some(url) = raw_url {
+        format!("{}\n[🔍 View Raw JSON]({})", desc_base, url)
+    } else {
+        desc_base
+    };
+
+    let mut embed = json!({
         "title": truncate(status_info.title, 256),
-        "description": truncate(&format!("[Legacy Payment] Update for order **{}**", order_id), 4096),
+        "description": truncate(&description, 4096),
         "color": status_info.color,
         "fields": fields,
         "footer": { "text": "Midtrans • Payment Legacy" },
         "timestamp": chrono::Utc::now().to_rfc3339()
     });
+
+    if let Some(url) = raw_url {
+        embed["url"] = json!(url);
+    }
 
     let mut payload = json!({ "embeds": [embed] });
     if let Some(m) = mention.filter(|m| !m.trim().is_empty()) {
@@ -144,7 +158,7 @@ pub fn build_recurring_embed(
     };
 
     let mut fields = vec![
-        create_field("🔄 Subscription ID", &format!("`{}`", sub_id), true),
+        create_field("🔁 Subscription ID", &format!("`{}`", sub_id), true),
         create_field("🏷️ Order ID", &format!("`{}`", order_id), true),
         create_field("📌 Status", &status_badge, true),
     ];
@@ -156,8 +170,8 @@ pub fn build_recurring_embed(
     if let Some(schedule) = notification.get("schedule") {
         let interval = schedule.get("interval").and_then(|v| v.as_i64());
         let unit = schedule.get("interval_unit").and_then(|v| v.as_str());
-        if let (Some(inv), Some(u)) = (interval, unit) {
-            fields.push(create_field("⏱️ Interval", &format!("Every {} {}", inv, u), true));
+        if let (Some(iv), Some(un)) = (interval, unit) {
+            fields.push(create_field("🔄 Billing Cycle", &format!("Every {} {}(s)", iv, un), true));
         }
     }
 
@@ -165,14 +179,25 @@ pub fn build_recurring_embed(
         fields.push(create_field("💳 Payment Type", pt, true));
     }
 
-    let embed = json!({
+    let desc_base = format!("Subscription **{}** status update: **{}**", sub_id, status);
+    let description = if let Some(url) = raw_url {
+        format!("{}\n[🔍 View Raw JSON]({})", desc_base, url)
+    } else {
+        desc_base
+    };
+
+    let mut embed = json!({
         "title": "🔁 Recurring Payment Notification",
-        "description": truncate(&format!("Subscription **{}** status update: **{}**", sub_id, status), 4096),
+        "description": truncate(&description, 4096),
         "color": color,
         "fields": fields,
         "footer": { "text": "Midtrans • Recurring Legacy" },
         "timestamp": chrono::Utc::now().to_rfc3339()
     });
+
+    if let Some(url) = raw_url {
+        embed["url"] = json!(url);
+    }
 
     let mut payload = json!({ "embeds": [embed] });
     if let Some(m) = mention.filter(|m| !m.trim().is_empty()) {
@@ -206,36 +231,47 @@ pub fn build_binding_embed(
     let channel = notification.get("channel")
         .or_else(|| notification.get("payment_type"))
         .and_then(|v| v.as_str())
-        .unwrap_or("Account Binding");
+        .unwrap_or("N/A")
+        .to_uppercase();
 
-    let is_enabled = account_status == "ENABLED" || status_code == "200";
-    let color = if is_enabled { 0x2ECC71 } else { 0x95A5A6 };
-    let status_badge = if is_enabled { "🟢 Linked / Enabled" } else { "⚪ Unlinked / Disabled" };
+    let is_enabled = account_status == "ENABLED" || account_status == "ACTIVE";
+    let (color, badge) = match account_status.as_str() {
+        "ENABLED" | "ACTIVE" => (0x2ECC71, format!("🟢 {}", account_status)),
+        "DISABLED" | "REVOKED" | "EXPIRED" => (0xE74C3C, format!("🔴 {}", account_status)),
+        "PENDING" => (0xF1C40F, format!("🟡 {}", account_status)),
+        _ => (0x95A5A6, format!("⚪ {}", account_status)),
+    };
 
     let mut fields = vec![
-        create_field("👤 Account ID", &format!("`{}`", account_id), true),
-        create_field("🔗 Binding Status", status_badge, true),
-        create_field("📱 Channel", channel, true),
+        create_field("🆔 Account ID", &format!("`{}`", account_id), true),
+        create_field("💳 Channel", &format!("**{}**", channel), true),
+        create_field("📌 Status", &badge, true),
+        create_field("🔢 Status Code", &format!("`{}`", status_code), true),
     ];
 
     if let Some(msg) = notification.get("status_message").and_then(|v| v.as_str()) {
-        fields.push(create_field("💬 Status Message", msg, false));
+        fields.push(create_field("📝 Message", msg, false));
     }
 
-    if let Some(meta) = notification.get("metadata") {
-        if meta.is_object() {
-            fields.push(create_field("📄 Metadata", &format!("`{}`", meta), false));
-        }
-    }
+    let desc_base = format!("Account binding event for **{}**", account_id);
+    let description = if let Some(url) = raw_url {
+        format!("{}\n[🔍 View Raw JSON]({})", desc_base, url)
+    } else {
+        desc_base
+    };
 
-    let embed = json!({
+    let mut embed = json!({
         "title": if is_enabled { "🔗 Account Linked Successfully" } else { "🔌 Account Unlinked" },
-        "description": truncate(&format!("Account binding event for **{}**", account_id), 4096),
+        "description": truncate(&description, 4096),
         "color": color,
         "fields": fields,
         "footer": { "text": "Midtrans • Binding Legacy" },
         "timestamp": chrono::Utc::now().to_rfc3339()
     });
+
+    if let Some(url) = raw_url {
+        embed["url"] = json!(url);
+    }
 
     let mut payload = json!({ "embeds": [embed] });
     if let Some(m) = mention.filter(|m| !m.trim().is_empty()) {
@@ -336,14 +372,25 @@ pub fn build_bi_snap_embed(
         ));
     }
 
-    let embed = json!({
+    let desc_base = format!("BI SNAP Open API notification for **{}**", order_id);
+    let description = if let Some(url) = raw_url {
+        format!("{}\n[🔍 View Raw JSON]({})", desc_base, url)
+    } else {
+        desc_base
+    };
+
+    let mut embed = json!({
         "title": truncate(status_info.title, 256),
-        "description": truncate(&format!("BI SNAP Open API notification for **{}**", order_id), 4096),
+        "description": truncate(&description, 4096),
         "color": status_info.color,
         "fields": fields,
         "footer": { "text": "Bank Indonesia SNAP • Midtrans Open API" },
         "timestamp": chrono::Utc::now().to_rfc3339()
     });
+
+    if let Some(url) = raw_url {
+        embed["url"] = json!(url);
+    }
 
     let mut payload = json!({ "embeds": [embed] });
     if let Some(m) = mention.filter(|m| !m.trim().is_empty()) {
@@ -371,12 +418,13 @@ pub fn build_iris_embed(
         .and_then(|v| v.as_str())
         .unwrap_or("N/A");
 
-    let amt_val = notification.get("amount").and_then(|v| {
+    let amount_str = notification.get("amount").and_then(|v| {
         if v.is_string() { v.as_str().map(|s| s.to_string()) }
         else if let Some(n) = v.as_f64() { Some(format!("{:.2}", n)) }
+        else if let Some(i) = v.as_i64() { Some(i.to_string()) }
         else { None }
     });
-    let formatted_amount = format_currency(amt_val.as_deref(), Some("IDR"));
+    let formatted_amount = format_currency(amount_str.as_deref(), Some("IDR"));
 
     let mut fields = vec![
         create_field("🏷️ Reference No", &format!("`{}`", ref_no), true),
@@ -386,39 +434,47 @@ pub fn build_iris_embed(
 
     let bank_code = notification.get("bank_code").and_then(|v| v.as_str());
     let account = notification.get("account").and_then(|v| v.as_str());
-    let ben_name = notification.get("beneficiary_name").and_then(|v| v.as_str());
+    let bene_name = notification.get("beneficiary_name").and_then(|v| v.as_str());
 
-    if bank_code.is_some() || account.is_some() || ben_name.is_some() {
-        let b = bank_code.map(|b| b.to_uppercase()).unwrap_or_else(|| "Bank".to_string());
-        let a = account.map(|acc| format!(" `{}`", acc)).unwrap_or_default();
-        let n = ben_name.map(|name| format!(" ({})", name)).unwrap_or_default();
-        fields.push(create_field("🏦 Beneficiary", format!("{}{}{}", b, a, n).trim(), true));
+    if bank_code.is_some() || account.is_some() || bene_name.is_some() {
+        let bank = bank_code.unwrap_or("Bank").to_uppercase();
+        let acc_str = account.map(|a| format!("`{}`", a)).unwrap_or_default();
+        let name_str = bene_name.map(|n| format!(" ({})", n)).unwrap_or_default();
+        let val = format!("{} {}{}", bank, acc_str, name_str).trim().to_string();
+        fields.push(create_field("🏦 Beneficiary", &val, true));
     }
 
     if let Some(notes) = notification.get("notes").and_then(|v| v.as_str()) {
         fields.push(create_field("📝 Notes", notes, true));
     }
 
-    if let Some(err_msg) = notification.get("error_message").and_then(|v| v.as_str()) {
-        fields.push(create_field("⚠️ Error Message", &format!("`{}`", err_msg), false));
+    if let Some(err) = notification.get("error_message").and_then(|v| v.as_str()) {
+        fields.push(create_field("⚠️ Error Message", &format!("`{}`", err), false));
     }
 
-    let timestamp_str = notification.get("updated_at")
-        .or_else(|| notification.get("created_at"))
-        .and_then(|v| v.as_str());
-
-    if let Some(ts) = timestamp_str {
-        fields.push(create_field("🕒 Timestamp", &format!("`{}`", ts), true));
+    if let Some(time) = notification.get("updated_at").or_else(|| notification.get("created_at")).and_then(|v| v.as_str()) {
+        fields.push(create_field("🕒 Timestamp", &format!("`{}`", time), true));
     }
 
-    let embed = json!({
+    let desc_base = format!("[IRIS Disbursement] Update for reference **{}**", ref_no);
+    let description = if let Some(url) = raw_url {
+        format!("{}\n[🔍 View Raw JSON]({})", desc_base, url)
+    } else {
+        desc_base
+    };
+
+    let mut embed = json!({
         "title": truncate(status_info.title, 256),
-        "description": truncate(&format!("[IRIS Disbursement] Update for reference **{}**", ref_no), 4096),
+        "description": truncate(&description, 4096),
         "color": status_info.color,
         "fields": fields,
         "footer": { "text": "Midtrans IRIS • Disbursement" },
         "timestamp": chrono::Utc::now().to_rfc3339()
     });
+
+    if let Some(url) = raw_url {
+        embed["url"] = json!(url);
+    }
 
     let mut payload = json!({ "embeds": [embed] });
     if let Some(m) = mention.filter(|m| !m.trim().is_empty()) {
@@ -441,7 +497,17 @@ pub async fn send_discord_webhook(
         return Ok(());
     }
 
-    let res = client.post(webhook_url)
+    let url_to_send = if payload.get("components").is_some() && !webhook_url.contains("with_components=") {
+        if webhook_url.contains('?') {
+            format!("{}&with_components=true", webhook_url)
+        } else {
+            format!("{}?with_components=true", webhook_url)
+        }
+    } else {
+        webhook_url.to_string()
+    };
+
+    let res = client.post(&url_to_send)
         .json(payload)
         .timeout(std::time::Duration::from_secs(10))
         .send()
