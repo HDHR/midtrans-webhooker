@@ -157,12 +157,12 @@ fn test_discord_embed_raw_url() {
     let embeds = res.payload.get("embeds").and_then(|v| v.as_array()).unwrap();
     let embed = &embeds[0];
 
-    // 1. Embed URL is set to raw_url so the title is clickable
-    assert_eq!(embed.get("url").and_then(|v| v.as_str()), Some(raw_url));
-
-    // 2. Embed description includes the markdown link chip
+    // 1. Embed description is clean without redundant raw JSON link
     let desc = embed.get("description").and_then(|v| v.as_str()).unwrap();
-    assert!(desc.contains("[🔍 View Raw JSON](https://webhooker.example.com/raw/abcd1234ef)"));
+    assert_eq!(desc, "[Legacy Payment] Update for order **order-akulaku-1792079069**");
+
+    // 2. Embed title does not have url
+    assert!(embed.get("url").is_none());
 
     // 3. Components array includes the action row button
     let components = res.payload.get("components").and_then(|v| v.as_array()).unwrap();
