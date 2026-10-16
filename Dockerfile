@@ -1,26 +1,26 @@
-# Multi-stage build for Rust (minimal static Alpine image)
-FROM rust:alpine AS builder
+# Multi-stage build using cargo-chef for dependency caching
+FROM lukemathwalker/cargo-chef:latest-rust-alpine AS chef
+WORKDIR /usr/src/midtrans-webhooker
 
 # Install build dependencies for OpenSSL static build on musl
 RUN apk add --no-cache musl-dev openssl-dev openssl-libs-static pkgconfig
-
-# Force static linking of OpenSSL
 ENV OPENSSL_STATIC=1
 
-WORKDIR /usr/src/midtrans-webhooker
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
 
-# Copy manifests first to leverage Docker layer caching
-COPY Cargo.toml Cargo.lock* ./
+FROM chef AS builder
+COPY --from=planner /usr/src/midtrans-webhooker/recipe.json recipe.json
+# Build dependencies - this layer is cached unless Cargo.toml or Cargo.lock changes
+RUN cargo chef cook --release --recipe-path recipe.json
 
-# Copy actual source code
-COPY src ./src
-COPY tests ./tests
+# Copy source code and build the application binary
+COPY . .
+RUN cargo build --release --bin midtrans-webhooker
 
-# Build release binary
-RUN cargo build --release
-
-# Final runtime image
-FROM alpine:latest
+# Final minimal runtime image
+FROM alpine:latest AS runtime
 
 RUN apk add --no-cache ca-certificates tzdata
 

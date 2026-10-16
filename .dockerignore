@@ -1,5 +1,8 @@
 target
 .env
+keys
+*.pem
+*.key
 .DS_Store
 .git
 .gitignore
