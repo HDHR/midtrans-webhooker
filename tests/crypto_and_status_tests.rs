@@ -4,6 +4,7 @@ use midtrans_webhooker::midtrans::{
     verify_iris_signature,
 };
 use midtrans_webhooker::lark::{generate_lark_sign, build_lark_payment_card};
+use midtrans_webhooker::discord::build_legacy_payment_embed;
 use serde_json::json;
 use sha2::{Sha512, Digest};
 
@@ -136,4 +137,39 @@ fn test_lark_card_backtick_cleaned() {
     let card_str = res.card.to_string();
     assert!(!card_str.contains("`"), "Lark card fields should not contain unrendered literal backticks: {}", card_str);
     assert!(card_str.contains("order-gopay-1792075936"));
+}
+
+#[test]
+fn test_discord_embed_raw_url() {
+    let payload = json!({
+        "order_id": "order-akulaku-1792079069",
+        "transaction_status": "pending",
+        "gross_amount": "11000.00",
+        "currency": "IDR",
+        "payment_type": "akulaku",
+        "transaction_time": "2026-10-15 22:44:29",
+        "transaction_id": "970c48c8-c0b8-42bb-b52c-b2c651184b35"
+    });
+
+    let raw_url = "https://webhooker.example.com/raw/abcd1234ef";
+    let res = build_legacy_payment_embed(&payload, None, Some(raw_url));
+
+    let embeds = res.payload.get("embeds").and_then(|v| v.as_array()).unwrap();
+    let embed = &embeds[0];
+
+    // 1. Embed URL is set to raw_url so the title is clickable
+    assert_eq!(embed.get("url").and_then(|v| v.as_str()), Some(raw_url));
+
+    // 2. Embed description includes the markdown link chip
+    let desc = embed.get("description").and_then(|v| v.as_str()).unwrap();
+    assert!(desc.contains("[🔍 View Raw JSON](https://webhooker.example.com/raw/abcd1234ef)"));
+
+    // 3. Components array includes the action row button
+    let components = res.payload.get("components").and_then(|v| v.as_array()).unwrap();
+    assert_eq!(components.len(), 1);
+    let button = &components[0]["components"][0];
+    assert_eq!(button["type"], 2);
+    assert_eq!(button["style"], 5);
+    assert_eq!(button["url"], raw_url);
+    assert_eq!(button["label"], "View Raw JSON");
 }
