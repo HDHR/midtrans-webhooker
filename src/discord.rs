@@ -84,25 +84,14 @@ pub fn build_legacy_payment_embed(
         fields.push(create_field("🆔 Midtrans ID", &format!("`{}`", trx_id), false));
     }
 
-    let desc_base = format!("[Legacy Payment] Update for order **{}**", order_id);
-    let description = if let Some(url) = raw_url {
-        format!("{}\n[🔍 View Raw JSON]({})", desc_base, url)
-    } else {
-        desc_base
-    };
-
-    let mut embed = json!({
+    let embed = json!({
         "title": truncate(status_info.title, 256),
-        "description": truncate(&description, 4096),
+        "description": truncate(&format!("[Legacy Payment] Update for order **{}**", order_id), 4096),
         "color": status_info.color,
         "fields": fields,
         "footer": { "text": "Midtrans • Payment Legacy" },
         "timestamp": chrono::Utc::now().to_rfc3339()
     });
-
-    if let Some(url) = raw_url {
-        embed["url"] = json!(url);
-    }
 
     let mut payload = json!({ "embeds": [embed] });
     if let Some(m) = mention.filter(|m| !m.trim().is_empty()) {
@@ -179,25 +168,14 @@ pub fn build_recurring_embed(
         fields.push(create_field("💳 Payment Type", pt, true));
     }
 
-    let desc_base = format!("Subscription **{}** status update: **{}**", sub_id, status);
-    let description = if let Some(url) = raw_url {
-        format!("{}\n[🔍 View Raw JSON]({})", desc_base, url)
-    } else {
-        desc_base
-    };
-
-    let mut embed = json!({
+    let embed = json!({
         "title": "🔁 Recurring Payment Notification",
-        "description": truncate(&description, 4096),
+        "description": truncate(&format!("Subscription **{}** status update: **{}**", sub_id, status), 4096),
         "color": color,
         "fields": fields,
         "footer": { "text": "Midtrans • Recurring Legacy" },
         "timestamp": chrono::Utc::now().to_rfc3339()
     });
-
-    if let Some(url) = raw_url {
-        embed["url"] = json!(url);
-    }
 
     let mut payload = json!({ "embeds": [embed] });
     if let Some(m) = mention.filter(|m| !m.trim().is_empty()) {
@@ -253,25 +231,14 @@ pub fn build_binding_embed(
         fields.push(create_field("📝 Message", msg, false));
     }
 
-    let desc_base = format!("Account binding event for **{}**", account_id);
-    let description = if let Some(url) = raw_url {
-        format!("{}\n[🔍 View Raw JSON]({})", desc_base, url)
-    } else {
-        desc_base
-    };
-
-    let mut embed = json!({
+    let embed = json!({
         "title": if is_enabled { "🔗 Account Linked Successfully" } else { "🔌 Account Unlinked" },
-        "description": truncate(&description, 4096),
+        "description": truncate(&format!("Account binding event for **{}**", account_id), 4096),
         "color": color,
         "fields": fields,
         "footer": { "text": "Midtrans • Binding Legacy" },
         "timestamp": chrono::Utc::now().to_rfc3339()
     });
-
-    if let Some(url) = raw_url {
-        embed["url"] = json!(url);
-    }
 
     let mut payload = json!({ "embeds": [embed] });
     if let Some(m) = mention.filter(|m| !m.trim().is_empty()) {
@@ -372,25 +339,14 @@ pub fn build_bi_snap_embed(
         ));
     }
 
-    let desc_base = format!("BI SNAP Open API notification for **{}**", order_id);
-    let description = if let Some(url) = raw_url {
-        format!("{}\n[🔍 View Raw JSON]({})", desc_base, url)
-    } else {
-        desc_base
-    };
-
-    let mut embed = json!({
+    let embed = json!({
         "title": truncate(status_info.title, 256),
-        "description": truncate(&description, 4096),
+        "description": truncate(&format!("BI SNAP Open API notification for **{}**", order_id), 4096),
         "color": status_info.color,
         "fields": fields,
         "footer": { "text": "Bank Indonesia SNAP • Midtrans Open API" },
         "timestamp": chrono::Utc::now().to_rfc3339()
     });
-
-    if let Some(url) = raw_url {
-        embed["url"] = json!(url);
-    }
 
     let mut payload = json!({ "embeds": [embed] });
     if let Some(m) = mention.filter(|m| !m.trim().is_empty()) {
@@ -456,25 +412,14 @@ pub fn build_iris_embed(
         fields.push(create_field("🕒 Timestamp", &format!("`{}`", time), true));
     }
 
-    let desc_base = format!("[IRIS Disbursement] Update for reference **{}**", ref_no);
-    let description = if let Some(url) = raw_url {
-        format!("{}\n[🔍 View Raw JSON]({})", desc_base, url)
-    } else {
-        desc_base
-    };
-
-    let mut embed = json!({
+    let embed = json!({
         "title": truncate(status_info.title, 256),
-        "description": truncate(&description, 4096),
+        "description": truncate(&format!("[IRIS Disbursement] Update for reference **{}**", ref_no), 4096),
         "color": status_info.color,
         "fields": fields,
         "footer": { "text": "Midtrans IRIS • Disbursement" },
         "timestamp": chrono::Utc::now().to_rfc3339()
     });
-
-    if let Some(url) = raw_url {
-        embed["url"] = json!(url);
-    }
 
     let mut payload = json!({ "embeds": [embed] });
     if let Some(m) = mention.filter(|m| !m.trim().is_empty()) {
