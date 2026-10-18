@@ -276,41 +276,191 @@ async fn get_raw_payload(
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Midtrans Webhook Raw Payload - {id}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
   <style>
-    :root {{ --bg: #0f172a; --panel: #1e293b; --text: #f8fafc; --muted: #94a3b8; --border: #334155; --primary: #38bdf8; }}
-    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 24px; line-height: 1.5; }}
-    .container {{ max-width: 1000px; margin: 0 auto; }}
-    .header {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }}
-    .badge {{ background: #0284c7; color: white; padding: 4px 10px; border-radius: 9999px; font-size: 13px; font-weight: 600; }}
-    .btn {{ background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 8px 16px; border-radius: 6px; cursor: pointer; text-decoration: none; font-size: 14px; font-weight: 500; }}
-    .btn:hover {{ border-color: var(--primary); color: var(--primary); }}
-    .card {{ background: var(--panel); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 24px; overflow: hidden; }}
-    .card-header {{ padding: 12px 16px; background: rgba(0,0,0,0.2); font-weight: 600; border-bottom: 1px solid var(--border); font-size: 14px; color: var(--muted); }}
-    pre {{ margin: 0 !important; padding: 16px !important; border-radius: 0 !important; max-height: 500px; overflow: auto; }}
+    :root {{
+      --bg: #282c34;
+      --fg: #9cdef2;
+      --panel: #111111;
+      --border: #355a66;
+      --red: #e06c75;
+      --green: #50fa7b;
+      --brand-color: #e06c75;
+      --muted: #6b7d87;
+    }}
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{
+      font-family: 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      background: var(--bg);
+      background-image: radial-gradient(rgba(156, 222, 242, 0.05) 1px, transparent 1px);
+      background-size: 20px 20px;
+      background-attachment: fixed;
+      color: var(--fg);
+      padding: 32px 24px;
+      line-height: 1.5;
+      min-height: 100vh;
+    }}
+    .container {{ max-width: 1040px; margin: 0 auto; }}
+    .header {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 20px;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }}
+    .title-area {{ display: flex; flex-direction: column; gap: 6px; }}
+    .title {{
+      font-size: 1.4rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      background: linear-gradient(135deg, var(--brand-color), var(--fg));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }}
+    .meta {{ font-size: 0.85rem; color: var(--muted); }}
+    .meta code {{
+      color: var(--fg);
+      background: rgba(17, 17, 17, 0.85);
+      padding: 2px 7px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }}
+    .actions {{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }}
+    .badge {{
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: var(--panel);
+      color: var(--fg);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+    }}
+    .badge::before {{
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      display: inline-block;
+      box-shadow: 0 0 8px var(--green);
+    }}
+    .btn {{
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--panel);
+      color: var(--fg);
+      border: 1px solid var(--border);
+      padding: 7px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 500;
+      font-family: inherit;
+      transition: all 0.15s ease;
+    }}
+    .btn:hover {{
+      border-color: var(--fg);
+      background: #181d24;
+      color: #ffffff;
+    }}
+    .btn-primary {{
+      background: rgba(224, 108, 117, 0.18);
+      color: #ffffff;
+      border-color: var(--red);
+    }}
+    .btn-primary:hover {{
+      background: var(--red);
+      border-color: var(--red);
+      color: #111111;
+      box-shadow: 0 0 12px rgba(224, 108, 117, 0.4);
+    }}
+    .card {{
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 24px;
+      overflow: hidden;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+    }}
+    .card-header {{
+      padding: 12px 18px;
+      background: #16191f;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.8rem;
+      color: var(--fg);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }}
+    .card-header span.tag {{
+      font-size: 0.7rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border: 1px solid var(--border);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }}
+    pre {{
+      margin: 0 !important;
+      padding: 18px !important;
+      border-radius: 0 !important;
+      max-height: 520px;
+      overflow: auto;
+      background: #13151a !important;
+      font-family: inherit !important;
+      font-size: 0.88rem !important;
+      line-height: 1.55 !important;
+    }}
+    code {{ font-family: inherit !important; }}
+    pre::-webkit-scrollbar {{ width: 8px; height: 8px; }}
+    pre::-webkit-scrollbar-track {{ background: #13151a; }}
+    pre::-webkit-scrollbar-thumb {{ background: var(--border); border-radius: 4px; }}
+    pre::-webkit-scrollbar-thumb:hover {{ background: var(--fg); }}
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <div>
-        <h1 style="margin: 0 0 6px 0; font-size: 22px;">Midtrans Webhook Payload</h1>
-        <span style="color: var(--muted); font-size: 14px;">ID: <code>{id}</code> &bull; {timestamp}</span>
+      <div class="title-area">
+        <h1 class="title">Midtrans Webhook Payload</h1>
+        <div class="meta">ID: <code>{id}</code> &bull; <span>{timestamp}</span></div>
       </div>
-      <div>
+      <div class="actions">
         <span class="badge">{endpoint}</span>
-        <button class="btn" onclick="navigator.clipboard.writeText(JSON.stringify(rawBody, null, 2)); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy JSON', 2000)">Copy JSON</button>
-        <a class="btn" href="/raw/{id}?format=json" target="_blank">Direct JSON</a>
+        <button class="btn btn-primary" onclick="navigator.clipboard.writeText(JSON.stringify(rawBody, null, 2)); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy JSON', 2000)">Copy JSON</button>
+        <a class="btn" href="/raw/{id}?format=json" target="_blank">Direct JSON &nearr;</a>
       </div>
     </div>
 
     <div class="card">
-      <div class="card-header">PAYLOAD BODY (JSON)</div>
+      <div class="card-header">
+        <span>PAYLOAD BODY</span>
+        <span class="tag">JSON</span>
+      </div>
       <pre><code class="language-json">{body_pretty}</code></pre>
     </div>
 
     <div class="card">
-      <div class="card-header">SIGNIFICANT HEADERS</div>
+      <div class="card-header">
+        <span>WEBHOOK HEADERS</span>
+        <span class="tag">HTTP</span>
+      </div>
       <pre><code class="language-json">{headers_pretty}</code></pre>
     </div>
   </div>
