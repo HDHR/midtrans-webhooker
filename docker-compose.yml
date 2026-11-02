@@ -1,0 +1,19 @@
+services:
+  midtrans-webhook:
+    image: ghcr.io/hdhr/midtrans-webhooker:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: midtrans-webhooker
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
+    volumes:
+      - ./keys:/app/keys:ro
+    env_file:
+      - .env
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
