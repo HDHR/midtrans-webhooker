@@ -45,6 +45,12 @@ fn test_bi_snap_status_mapping() {
     assert_eq!(s03.badge, "🟡 Pending (03)");
     assert!(s03.is_pending);
 
+    let s04 = get_bi_snap_status_details("04", None);
+    assert_eq!(s04.badge, "🔵 Refunded (04)");
+
+    let s05 = get_bi_snap_status_details("05", None);
+    assert_eq!(s05.badge, "⚪ Canceled (05)");
+
     let s06 = get_bi_snap_status_details("06", None);
     assert_eq!(s06.badge, "🔴 Failure (06)");
     assert!(s06.is_failed);
@@ -52,6 +58,20 @@ fn test_bi_snap_status_mapping() {
     let s08 = get_bi_snap_status_details("08", None);
     assert_eq!(s08.badge, "🔴 Expired (08)");
     assert!(s08.is_failed);
+
+    let s09 = get_bi_snap_status_details("09", None);
+    assert_eq!(s09.badge, "🔴 Rejected (09)");
+    assert!(s09.is_failed);
+
+    // Number extraction in JSON payload (numeric 8 converts to "08")
+    let numeric_payload = json!({
+        "paymentRequestId": "PAY-NUM-1",
+        "latestTransactionStatus": 8
+    });
+    let (code_num, _) = parse_bi_snap_status(&numeric_payload);
+    assert_eq!(code_num, "08");
+    let num_info = get_bi_snap_status_details(&code_num, None);
+    assert_eq!(num_info.badge, "🔴 Expired (08)");
 }
 
 #[test]

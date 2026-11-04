@@ -406,96 +406,74 @@ pub fn parse_bi_snap_order_ref(notification: &serde_json::Value) -> String {
 
 /// Map BI SNAP / Open API latestTransactionStatus code to details
 pub fn get_bi_snap_status_details(status_code: &str, status_desc: Option<&str>) -> StatusDetails {
-    let clean_code = status_code.trim().to_ascii_lowercase();
-    let desc_lower = status_desc.map(|d| d.trim().to_ascii_lowercase());
-
-    if clean_code == "00" || clean_code == "success" || clean_code == "settlement" {
-        return StatusDetails {
+    match status_code {
+        "00" => StatusDetails {
             title: "✅ BI SNAP Payment Successful",
             badge: "🟢 Success (00)".to_string(),
             color: 0x2ECC71,
             is_success: true,
             is_pending: false,
             is_failed: false,
-        };
-    }
-
-    if clean_code == "03" || clean_code == "pending" {
-        return StatusDetails {
+        },
+        "03" => StatusDetails {
             title: "⏳ BI SNAP Payment Pending",
             badge: "🟡 Pending (03)".to_string(),
             color: 0xF39C12,
             is_success: false,
             is_pending: true,
             is_failed: false,
-        };
-    }
-
-    if clean_code == "04" || clean_code == "refund" || clean_code == "refunded" {
-        return StatusDetails {
+        },
+        "04" => StatusDetails {
             title: "🔄 BI SNAP Payment Refunded",
             badge: "🔵 Refunded (04)".to_string(),
             color: 0x3498DB,
             is_success: false,
             is_pending: false,
             is_failed: false,
-        };
-    }
-
-    if clean_code == "05" || clean_code == "cancel" || clean_code == "canceled" || clean_code == "cancelled" {
-        return StatusDetails {
+        },
+        "05" => StatusDetails {
             title: "🚫 BI SNAP Payment Canceled",
             badge: "⚪ Canceled (05)".to_string(),
             color: 0x95A5A6,
             is_success: false,
             is_pending: false,
             is_failed: true,
-        };
-    }
-
-    if clean_code == "06" || clean_code == "failure" || clean_code == "failed" {
-        return StatusDetails {
+        },
+        "06" => StatusDetails {
             title: "💥 BI SNAP Payment Failed",
             badge: "🔴 Failure (06)".to_string(),
             color: 0xE74C3C,
             is_success: false,
             is_pending: false,
             is_failed: true,
-        };
-    }
-
-    if clean_code == "08" || clean_code == "8" || clean_code == "expire" || clean_code == "expired"
-        || desc_lower.as_deref() == Some("expire") || desc_lower.as_deref() == Some("expired") || desc_lower.as_deref() == Some("expiry")
-    {
-        return StatusDetails {
+        },
+        "08" => StatusDetails {
             title: "⏰ BI SNAP Payment Expired",
             badge: "🔴 Expired (08)".to_string(),
             color: 0xE74C3C,
             is_success: false,
             is_pending: false,
             is_failed: true,
-        };
-    }
-
-    if clean_code == "09" || clean_code == "reject" || clean_code == "rejected" {
-        return StatusDetails {
+        },
+        "09" => StatusDetails {
             title: "❌ BI SNAP Payment Rejected",
             badge: "🔴 Rejected (09)".to_string(),
             color: 0xE74C3C,
             is_success: false,
             is_pending: false,
             is_failed: true,
-        };
-    }
-
-    let desc = status_desc.unwrap_or(status_code);
-    StatusDetails {
-        title: "ℹ️ BI SNAP Notification",
-        badge: format!("{} ({})", desc, if status_code.is_empty() { "N/A" } else { status_code }),
-        color: 0x7F8C8D,
-        is_success: false,
-        is_pending: false,
-        is_failed: false,
+        },
+        other => {
+            let desc = status_desc.filter(|d| !d.is_empty()).unwrap_or(other);
+            StatusDetails {
+                title: "ℹ️ BI SNAP Notification",
+                badge: format!("{} ({})", desc, if other.is_empty() { "N/A" } else { other }),
+                color: 0x7F8C8D,
+                is_success: false,
+                is_pending: false,
+                is_failed: false,
+            }
+        }
     }
 }
 
