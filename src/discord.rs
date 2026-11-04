@@ -1,6 +1,7 @@
 use crate::midtrans::{
     format_currency, parse_payment_method, get_status_details,
     get_bi_snap_status_details, get_iris_status_details, StatusDetails,
+    parse_bi_snap_status, parse_bi_snap_order_ref,
 };
 use serde_json::json;
 
@@ -258,19 +259,9 @@ pub fn build_bi_snap_embed(
     mention: Option<&str>,
     raw_url: Option<&str>,
 ) -> DiscordBuildResult {
-    let status_code = notification.get("latestTransactionStatus")
-        .or_else(|| notification.get("transactionStatus"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("UNKNOWN");
-
-    let status_desc = notification.get("transactionStatusDesc").and_then(|v| v.as_str());
-    let status_info = get_bi_snap_status_details(status_code, status_desc);
-
-    let order_id = notification.get("originalPartnerReferenceNo")
-        .or_else(|| notification.get("originalReferenceNo"))
-        .or_else(|| notification.get("virtualAccountNo"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("N/A");
+    let (status_code, status_desc) = parse_bi_snap_status(notification);
+    let status_info = get_bi_snap_status_details(&status_code, status_desc.as_deref());
+    let order_id = parse_bi_snap_order_ref(notification);
 
     let amount_obj = notification.get("amount").or_else(|| notification.get("paidAmount"));
     let amt_val = amount_obj.and_then(|a| a.get("value")).and_then(|v| {
@@ -315,15 +306,21 @@ pub fn build_bi_snap_embed(
     }
 
     if let Some(va) = notification.get("virtualAccountNo").and_then(|v| v.as_str()) {
-        let name = notification.get("virtualAccountName").and_then(|v| v.as_str()).unwrap_or("N/A");
-        fields.push(create_field(
-            "🔢 Virtual Account",
-            &format!("No: `{}`\nName: {}", va, name),
-            true,
-        ));
+        let name = notification.get("virtualAccountName").and_then(|v| v.as_str());
+        let bank = notification.get("additionalInfo").and_then(|a| a.get("bank")).and_then(|v| v.as_str());
+        let va_line = match (bank, name) {
+            (Some(b), Some(n)) => format!("No: `{}`\nBank: **{}** | Name: {}", va, b.to_uppercase(), n),
+            (Some(b), None) => format!("No: `{}`\nBank: **{}**", va, b.to_uppercase()),
+            (None, Some(n)) => format!("No: `{}`\nName: {}", va, n),
+            (None, None) => format!("No: `{}`", va),
+        };
+        fields.push(create_field("🔢 Virtual Account", &va_line, true));
     }
 
-    if let Some(orig_ref) = notification.get("originalReferenceNo").and_then(|v| v.as_str()) {
+    let midtrans_ref = notification.get("originalReferenceNo")
+        .or_else(|| notification.get("trxId"))
+        .and_then(|v| v.as_str());
+    if let Some(orig_ref) = midtrans_ref {
         if orig_ref != order_id {
             fields.push(create_field("🆔 Midtrans Ref", &format!("`{}`", orig_ref), true));
         }

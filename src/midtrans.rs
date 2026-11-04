@@ -336,76 +336,166 @@ pub fn get_status_details(notification: &serde_json::Value) -> StatusDetails {
     }
 }
 
+/// Extract string representation of a value that might be a String or Number
+fn val_to_string(v: &serde_json::Value) -> Option<String> {
+    if let Some(s) = v.as_str() {
+        let trimmed = s.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
+        }
+    } else if let Some(i) = v.as_i64() {
+        if i >= 0 && i < 10 {
+            return Some(format!("{:02}", i));
+        } else {
+            return Some(i.to_string());
+        }
+    } else if let Some(u) = v.as_u64() {
+        if u < 10 {
+            return Some(format!("{:02}", u));
+        } else {
+            return Some(u.to_string());
+        }
+    }
+    None
+}
+
+/// Extract status code and optional status description from a BI SNAP payload
+pub fn parse_bi_snap_status(notification: &serde_json::Value) -> (String, Option<String>) {
+    let add_info = notification.get("additionalInfo");
+
+    // 1. Status code candidates (QRIS, Direct Debit, and VA paymentFlagStatus)
+    let status_code = notification.get("latestTransactionStatus")
+        .or_else(|| notification.get("transactionStatus"))
+        .or_else(|| notification.get("transaction_status"))
+        .or_else(|| notification.get("paymentFlagStatus"))
+        .or_else(|| add_info.and_then(|a| a.get("paymentFlagStatus")))
+        .or_else(|| add_info.and_then(|a| a.get("latestTransactionStatus")))
+        .or_else(|| add_info.and_then(|a| a.get("transactionStatus")))
+        .or_else(|| notification.get("status"))
+        .or_else(|| notification.get("statusCode"))
+        .or_else(|| notification.get("status_code"))
+        .and_then(val_to_string)
+        .unwrap_or_else(|| "UNKNOWN".to_string());
+
+    // 2. Status description candidates
+    let status_desc = notification.get("transactionStatusDesc")
+        .or_else(|| notification.get("statusDesc"))
+        .or_else(|| notification.get("status_desc"))
+        .or_else(|| notification.get("statusMessage"))
+        .or_else(|| notification.get("status_message"))
+        .or_else(|| add_info.and_then(|a| a.get("paymentFlagReason")))
+        .or_else(|| add_info.and_then(|a| a.get("paymentFlagReasonDesc")))
+        .and_then(|v| v.as_str().map(|s| s.trim().to_string()))
+        .filter(|s| !s.is_empty());
+
+    (status_code, status_desc)
+}
+
+/// Extract primary order/transaction reference for BI SNAP
+pub fn parse_bi_snap_order_ref(notification: &serde_json::Value) -> String {
+    notification.get("originalPartnerReferenceNo")
+        .or_else(|| notification.get("partnerReferenceNo"))
+        .or_else(|| notification.get("paymentRequestId"))
+        .or_else(|| notification.get("referenceNo"))
+        .or_else(|| notification.get("originalReferenceNo"))
+        .or_else(|| notification.get("trxId"))
+        .or_else(|| notification.get("virtualAccountNo"))
+        .and_then(val_to_string)
+        .unwrap_or_else(|| "UNKNOWN".to_string())
+}
+
 /// Map BI SNAP / Open API latestTransactionStatus code to details
 pub fn get_bi_snap_status_details(status_code: &str, status_desc: Option<&str>) -> StatusDetails {
-    match status_code {
-        "00" => StatusDetails {
+    let clean_code = status_code.trim().to_ascii_lowercase();
+    let desc_lower = status_desc.map(|d| d.trim().to_ascii_lowercase());
+
+    if clean_code == "00" || clean_code == "success" || clean_code == "settlement" {
+        return StatusDetails {
             title: "✅ BI SNAP Payment Successful",
             badge: "🟢 Success (00)".to_string(),
             color: 0x2ECC71,
             is_success: true,
             is_pending: false,
             is_failed: false,
-        },
-        "03" => StatusDetails {
+        };
+    }
+
+    if clean_code == "03" || clean_code == "pending" {
+        return StatusDetails {
             title: "⏳ BI SNAP Payment Pending",
             badge: "🟡 Pending (03)".to_string(),
             color: 0xF39C12,
             is_success: false,
             is_pending: true,
             is_failed: false,
-        },
-        "04" => StatusDetails {
+        };
+    }
+
+    if clean_code == "04" || clean_code == "refund" || clean_code == "refunded" {
+        return StatusDetails {
             title: "🔄 BI SNAP Payment Refunded",
             badge: "🔵 Refunded (04)".to_string(),
             color: 0x3498DB,
             is_success: false,
             is_pending: false,
             is_failed: false,
-        },
-        "05" => StatusDetails {
+        };
+    }
+
+    if clean_code == "05" || clean_code == "cancel" || clean_code == "canceled" || clean_code == "cancelled" {
+        return StatusDetails {
             title: "🚫 BI SNAP Payment Canceled",
             badge: "⚪ Canceled (05)".to_string(),
             color: 0x95A5A6,
             is_success: false,
             is_pending: false,
             is_failed: true,
-        },
-        "06" => StatusDetails {
+        };
+    }
+
+    if clean_code == "06" || clean_code == "failure" || clean_code == "failed" {
+        return StatusDetails {
             title: "💥 BI SNAP Payment Failed",
             badge: "🔴 Failure (06)".to_string(),
             color: 0xE74C3C,
             is_success: false,
             is_pending: false,
             is_failed: true,
-        },
-        "08" => StatusDetails {
+        };
+    }
+
+    if clean_code == "08" || clean_code == "8" || clean_code == "expire" || clean_code == "expired"
+        || desc_lower.as_deref() == Some("expire") || desc_lower.as_deref() == Some("expired") || desc_lower.as_deref() == Some("expiry")
+    {
+        return StatusDetails {
             title: "⏰ BI SNAP Payment Expired",
             badge: "🔴 Expired (08)".to_string(),
             color: 0xE74C3C,
             is_success: false,
             is_pending: false,
             is_failed: true,
-        },
-        "09" => StatusDetails {
+        };
+    }
+
+    if clean_code == "09" || clean_code == "reject" || clean_code == "rejected" {
+        return StatusDetails {
             title: "❌ BI SNAP Payment Rejected",
             badge: "🔴 Rejected (09)".to_string(),
             color: 0xE74C3C,
             is_success: false,
             is_pending: false,
             is_failed: true,
-        },
-        other => {
-            let desc = status_desc.filter(|d| !d.is_empty()).unwrap_or(other);
-            StatusDetails {
-                title: "ℹ️ BI SNAP Notification",
-                badge: format!("{} ({})", desc, if other.is_empty() { "N/A" } else { other }),
-                color: 0x7F8C8D,
-                is_success: false,
-                is_pending: false,
-                is_failed: false,
-            }
-        }
+        };
+    }
+
+    let desc = status_desc.unwrap_or(status_code);
+    StatusDetails {
+        title: "ℹ️ BI SNAP Notification",
+        badge: format!("{} ({})", desc, if status_code.is_empty() { "N/A" } else { status_code }),
+        color: 0x7F8C8D,
+        is_success: false,
+        is_pending: false,
+        is_failed: false,
     }
 }
 

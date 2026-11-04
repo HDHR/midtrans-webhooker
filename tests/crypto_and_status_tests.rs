@@ -2,9 +2,10 @@ use midtrans_webhooker::midtrans::{
     format_currency, get_status_details, get_bi_snap_status_details,
     get_iris_status_details, verify_midtrans_signature,
     verify_iris_signature, check_timestamp_freshness,
+    parse_bi_snap_status, parse_bi_snap_order_ref,
 };
-use midtrans_webhooker::lark::{generate_lark_sign, build_lark_payment_card};
-use midtrans_webhooker::discord::build_legacy_payment_embed;
+use midtrans_webhooker::lark::{generate_lark_sign, build_lark_payment_card, build_lark_bi_snap_card};
+use midtrans_webhooker::discord::{build_legacy_payment_embed, build_bi_snap_embed};
 use serde_json::json;
 use sha2::{Sha512, Digest};
 
@@ -47,6 +48,59 @@ fn test_bi_snap_status_mapping() {
     let s06 = get_bi_snap_status_details("06", None);
     assert_eq!(s06.badge, "🔴 Failure (06)");
     assert!(s06.is_failed);
+
+    let s08 = get_bi_snap_status_details("08", None);
+    assert_eq!(s08.badge, "🔴 Expired (08)");
+    assert!(s08.is_failed);
+}
+
+#[test]
+fn test_bi_snap_va_expire_parsing() {
+    let payload = json!({
+        "additionalInfo": {
+            "bank": "BNI",
+            "customField": {
+                "1": "custom-field-1",
+                "2": "custom-field-2",
+                "3": "custom-field-3"
+            },
+            "merchantId": "G147667240",
+            "paymentFlagStatus": "08"
+        },
+        "customerNo": "289361462063",
+        "paidAmount": {
+            "currency": "IDR",
+            "value": "10000.00"
+        },
+        "partnerServiceId": "8578",
+        "paymentRequestId": "A120261103095337WnIawxCPBzID",
+        "referenceNo": "A120261103095337WnIawxCPBzID",
+        "trxId": "1793699617762",
+        "virtualAccountNo": "8578289361462063"
+    });
+
+    let (status_code, status_desc) = parse_bi_snap_status(&payload);
+    assert_eq!(status_code, "08");
+    let status_info = get_bi_snap_status_details(&status_code, status_desc.as_deref());
+    assert_eq!(status_info.badge, "🔴 Expired (08)");
+    assert_eq!(status_info.title, "⏰ BI SNAP Payment Expired");
+    assert!(status_info.is_failed);
+
+    let order_id = parse_bi_snap_order_ref(&payload);
+    assert_eq!(order_id, "A120261103095337WnIawxCPBzID");
+
+    let discord = build_bi_snap_embed(&payload, &[], None, None);
+    let discord_str = discord.payload.to_string();
+    assert!(discord_str.contains("🔴 Expired (08)"));
+    assert!(discord_str.contains("A120261103095337WnIawxCPBzID"));
+    assert!(discord_str.contains("BNI"));
+
+    let lark = build_lark_bi_snap_card(&payload, &[], None, None);
+    let lark_str = lark.card.to_string();
+    assert!(lark_str.contains("🔴 Expired (08)"));
+    assert!(lark_str.contains("A120261103095337WnIawxCPBzID"));
+    assert!(lark_str.contains("BNI"));
+    assert!(!lark_str.contains("UNKNOWN (UNKNOWN)"));
 }
 
 #[test]

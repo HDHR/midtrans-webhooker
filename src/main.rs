@@ -800,16 +800,8 @@ async fn handle_bi_snap(
         }
     };
 
-    let order_ref = notification.get("originalPartnerReferenceNo")
-        .or_else(|| notification.get("originalReferenceNo"))
-        .or_else(|| notification.get("virtualAccountNo"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("UNKNOWN");
-
-    let status = notification.get("latestTransactionStatus")
-        .or_else(|| notification.get("transactionStatus"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("UNKNOWN");
+    let order_ref = midtrans::parse_bi_snap_order_ref(&notification);
+    let (status, _) = midtrans::parse_bi_snap_status(&notification);
 
     info!("[BI-SNAP] url={}, orderRef={}, status={}", path, order_ref, status);
 
